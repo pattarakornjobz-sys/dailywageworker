@@ -1,0 +1,81 @@
+:root {
+  --bg: #f4f6f5;
+  --surface: #ffffff;
+  --ink: #1c2a2a;
+  --ink-soft: #4b5b5a;
+  --muted: #7a8b8a;
+  --line: #d7dedc;
+  --line-soft: #e6ecea;
+  --accent: #2b6e63;
+  --accent-soft: #deeae6;
+  --accent-ink: #1b4b42;
+  --amber: #9c6a20;
+  --amber-soft: #f1e4cc;
+  --brick: #9c3b34;
+  --brick-soft: #f3dedb;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans Thai", "Sarabun", system-ui, sans-serif;
+}
+
+a { color: var(--accent-ink); }
+
+.page { max-width: 1100px; margin: 0 auto; padding: 32px 24px 80px; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px; background: var(--surface); border-bottom: 1px solid var(--line);
+}
+
+h1, h2, h3 { margin: 0; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  padding: 20px 24px; margin-bottom: 20px;
+}
+
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th {
+  text-align: left; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--muted); padding: 8px 10px; background: var(--line-soft); font-weight: 500;
+}
+td { padding: 8px 10px; border-top: 1px solid var(--line-soft); }
+
+.btn {
+  font-size: 14px; font-weight: 500; padding: 9px 18px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.danger { background: var(--brick-soft); border-color: var(--brick); color: var(--brick); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+  padding: 4px 10px; border-radius: 100px; font-weight: 500;
+}
+
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.field label { font-size: 12.5px; color: var(--ink-soft); }
+.field input, .field select {
+  font-size: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg);
+}
+
+.error-box {
+  background: var(--brick-soft); color: var(--brick); border: 1px solid #e6bfb9;
+  padding: 10px 14px; border-radius: 6px; font-size: 13.5px; margin-bottom: 16px;
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
+  .page { max-width: none; padding: 0; }
+  .card { border: none; padding: 0; }
+}

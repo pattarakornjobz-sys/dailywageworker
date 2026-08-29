@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Agency } from "@/lib/types";
+import LogoutButton from "@/components/LogoutButton";
 
 export default function ClerkSidebar({ agencies, fullName }: { agencies: Agency[]; fullName: string }) {
   const pathname = usePathname();
@@ -24,6 +25,9 @@ export default function ClerkSidebar({ agencies, fullName }: { agencies: Agency[
           ธุรการต้นสังกัด
         </div>
         <div style={{ fontSize: 13.5, fontWeight: 500, marginTop: 2 }}>{fullName}</div>
+        <div style={{ marginTop: 10 }}>
+          <LogoutButton />
+        </div>
       </div>
 
       <Link

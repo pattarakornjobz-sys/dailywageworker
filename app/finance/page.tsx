@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { STATUS_LABEL, STATUS_COLOR, effectiveStatus } from "@/lib/statusLabels";
 import type { Agency, BankCompanyCode, PayrollBatch, PayrollDetail, PayrollPeriod, Profile } from "@/lib/types";
 import { QuickReceiveButton, QuickTransferPanel } from "./QuickActions";
+import LogoutButton from "@/components/LogoutButton";
 
 const VISIBLE_STATUSES = ["submitted_to_central", "finance_received", "transferring", "paid", "rejected"];
 
@@ -81,7 +82,10 @@ export default async function FinanceHome() {
           </div>
           <strong>ภาพรวมทุกหน่วยงาน — รายการรอดำเนินการ</strong>
         </div>
-        <div style={{ fontSize: 13.5, color: "var(--ink-soft)" }}>{profile.full_name}</div>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <span style={{ fontSize: 13.5, color: "var(--ink-soft)" }}>{profile.full_name}</span>
+          <LogoutButton />
+        </div>
       </div>
 
       <div className="page">

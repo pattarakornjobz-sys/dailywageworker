@@ -9,7 +9,7 @@ export const STATUS_LABEL: Record<PayrollStatus, string> = {
   submitted_to_central: "ส่งเรื่องเข้า A1 แล้ว",
   rejected: "ตีกลับ — รอธุรการแก้ไข",
   central_approved: "ส่วนกลางอนุมัติแล้ว",
-  finance_received: "การเงินรับเรื่องแล้ว กำหนดตรวจสอบ",
+  finance_received: "การเงินรับเรื่องแล้ว รอตรวจสอบ",
   transferring: "กำลังดำเนินการโอนเงิน",
   bank_file_generated: "สร้างไฟล์โอนเงินแล้ว",
   paid: "เสร็จสิ้น",

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { STATUS_LABEL, effectiveStatus } from "@/lib/statusLabels";
@@ -123,9 +124,14 @@ export default async function FinanceBatchDetail({ params }: { params: { batchId
             {agency?.name} · {period.period_start} – {period.period_end}
           </strong>
         </div>
-        <span className="btn" style={{ cursor: "default" }}>
-          สถานะ: {STATUS_LABEL[displayStatus]}
-        </span>
+        <div className="no-print" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <Link href="/finance" className="btn">
+            ← กลับหน้าแรก
+          </Link>
+          <span className="btn" style={{ cursor: "default" }}>
+            สถานะ: {STATUS_LABEL[displayStatus]}
+          </span>
+        </div>
       </div>
 
       <div className="page">

@@ -52,9 +52,7 @@ export default async function ClerkBatchDetail({ params }: { params: { batchId: 
     .filter((r) => r.employee)
     .sort((a, b) => (a.employee.first_name > b.employee.first_name ? 1 : -1));
 
-  const totalDays = rows.reduce((s, r) => s + r.days_full + r.days_half, 0);
   const totalAmount = rows.reduce((s, r) => s + r.total_amount, 0);
-  const ackCount = rows.filter((r) => r.employee_ack_at).length;
 
   const { data: eventsData } = await supabase
     .from("payroll_status_events")
@@ -98,8 +96,6 @@ export default async function ClerkBatchDetail({ params }: { params: { batchId: 
 
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid var(--line-soft)" }}>
             <span>จำนวนลูกจ้าง: {rows.length} คน</span>
-            <span>เซ็นรับทราบแล้ว: {ackCount}/{rows.length}</span>
-            <span>รวมวันทำงาน: {totalDays.toLocaleString()} วัน</span>
           </div>
 
           <table>
@@ -132,18 +128,26 @@ export default async function ClerkBatchDetail({ params }: { params: { batchId: 
               </tr>
             </tbody>
           </table>
+        </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginTop: 26, paddingTop: 20, borderTop: "1px dashed var(--line)", fontSize: 12.5, textAlign: "center", color: "var(--ink-soft)" }}>
+        <div className="card signature-page" style={{ marginTop: 16 }}>
+          <div style={{ textAlign: "center", marginBottom: 26 }}>
+            <h2 style={{ fontSize: 16 }}>ลงลายมือชื่อรับรอง</h2>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>
+              {agency?.name} · ระหว่างวันที่ {period.period_start} ถึง {period.period_end} · ยอดรวม {totalAmount.toLocaleString()} บาท
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, fontSize: 12.5, textAlign: "center", color: "var(--ink-soft)" }}>
             <div>
-              <div style={{ height: 44, borderBottom: "1px solid var(--line)", marginBottom: 8 }} />
-              ธุรการผู้จัดทำ
+              <div style={{ height: 60, borderBottom: "1px solid var(--line)", marginBottom: 8 }} />
+              เจ้าหน้าที่ธุรการ
             </div>
             <div>
-              <div style={{ height: 44, borderBottom: "1px solid var(--line)", marginBottom: 8 }} />
-              หัวหน้าหน่วยงานต้นสังกัด
+              <div style={{ height: 60, borderBottom: "1px solid var(--line)", marginBottom: 8 }} />
+              หัวหน้าหน่วยงาน
             </div>
             <div>
-              <div style={{ height: 44, borderBottom: "1px solid var(--line)", marginBottom: 8 }} />
+              <div style={{ height: 60, borderBottom: "1px solid var(--line)", marginBottom: 8 }} />
               ผู้บริหารอนุมัติ
             </div>
           </div>

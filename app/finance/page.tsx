@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { STATUS_LABEL, STATUS_COLOR, effectiveStatus } from "@/lib/statusLabels";
 import type { Agency, BankCompanyCode, PayrollBatch, PayrollDetail, PayrollPeriod, Profile } from "@/lib/types";
-import { QuickReceiveButton, QuickTransferPanel } from "./QuickActions";
+import FinanceBoard from "./FinanceBoard";
 import LogoutButton from "@/components/LogoutButton";
 
 const VISIBLE_STATUSES = ["submitted_to_central", "finance_received", "transferring", "paid", "rejected"];
@@ -83,6 +82,12 @@ export default async function FinanceHome() {
           <strong>ภาพรวมทุกหน่วยงาน — รายการรอดำเนินการ</strong>
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <Link href="/finance/transfers" className="btn">
+            สรุปรายการโอนเงิน
+          </Link>
+          <a className="btn" href="/api/finance-report">
+            ดาวน์โหลดรายงานสรุป (PDF)
+          </a>
           <span style={{ fontSize: 13.5, color: "var(--ink-soft)" }}>{profile.full_name}</span>
           <LogoutButton />
         </div>
@@ -94,58 +99,11 @@ export default async function FinanceHome() {
         {batches.length > 0 && (
           <div style={{ fontSize: 13.5, color: "var(--ink-soft)", marginBottom: 18 }}>
             รวมทั้งหมด {batches.length} รายการ · {groups.length} หน่วยงาน · ยอดรวม {grandTotal.toLocaleString()} บาท
+            <span style={{ color: "var(--muted)" }}> — ติ๊กเลือกได้หลายรายการ แล้วกดรับเรื่อง/กำหนดการโอนเงินครั้งเดียว</span>
           </div>
         )}
 
-        {groups.map(({ agency, rows }) => (
-          <div key={agency.id} style={{ marginBottom: 26 }}>
-            <h3 style={{ fontSize: 14.5, marginBottom: 10, display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span style={{ color: "var(--muted)", fontSize: 11, fontWeight: 400 }}>{agency.code}</span>
-              {agency.name}
-            </h3>
-            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>ช่วงรอบจ่าย</th>
-                    <th>ยอดรวม</th>
-                    <th>สถานะ</th>
-                    <th>การดำเนินการ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((batch) => {
-                    const status = effectiveStatus(batch.status, null);
-                    return (
-                      <tr key={batch.id}>
-                        <td>
-                          {batch.period.period_start} – {batch.period.period_end}
-                        </td>
-                        <td>{batch.total.toLocaleString()} บาท</td>
-                        <td>
-                          <span className="pill" style={{ background: "#0000", color: STATUS_COLOR[status] }}>
-                            ● {STATUS_LABEL[status]}
-                          </span>
-                        </td>
-                        <td>
-                          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                            {batch.status === "submitted_to_central" && <QuickReceiveButton batchId={batch.id} />}
-                            {batch.status === "finance_received" && (
-                              <QuickTransferPanel batchId={batch.id} companyCodes={companyCodes} />
-                            )}
-                            <Link href={`/finance/${batch.id}`} className="btn">
-                              รายละเอียด →
-                            </Link>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))}
+        {groups.length > 0 && <FinanceBoard groups={groups} companyCodes={companyCodes} />}
       </div>
     </div>
   );

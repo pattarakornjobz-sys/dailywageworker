@@ -6,24 +6,42 @@ import { createClient } from "@/lib/supabase/server";
 // + attendance_scans (upsert) จากนั้นเรียก RPC recompute_payroll_details ให้คำนวณยอดใหม่ทั้งรอบ
 // ใช้ session cookie ของผู้ใช้ที่ login อยู่ — RLS จำกัดสิทธิ์ (เฉพาะ agency_clerk) ไม่ได้ใช้ service_role key
 
-const FINGERPRINT_ALIASES = ["เลขสแกนนิ้ว", "รหัสสแกนนิ้ว", "รหัสพนักงาน", "fingerprint_no", "fingerprint"];
+// รายชื่อ alias เรียงตาม "ความสำคัญ" — ตัวที่มาก่อนคือคอลัมน์ที่ตรงที่สุด ถ้าเจอในไฟล์ให้ใช้ตัวนั้นก่อน
+// รองรับทั้งไฟล์ที่ดึงตรงจากเครื่องสแกนนิ้ว (หัวตารางแบบ 'รหัสนิ้วมือ', 'ชื่อ-สกุล', 'เข้างาน', 'ออกงาน' ฯลฯ)
+// และไฟล์เทมเพลตของระบบเอง (หัวตารางแบบ 'เลขสแกนนิ้ว', 'ชื่อ', 'นามสกุล' ฯลฯ)
+const FINGERPRINT_ALIASES = ["รหัสนิ้วมือ", "เลขสแกนนิ้ว", "รหัสสแกนนิ้ว", "รหัสพนักงาน", "fingerprint_no", "fingerprint"];
 const PREFIX_ALIASES = ["คำนำหน้า", "prefix"];
 const FIRST_NAME_ALIASES = ["ชื่อ", "first_name", "firstname"];
 const LAST_NAME_ALIASES = ["นามสกุล", "สกุล", "last_name", "lastname"];
+// ไฟล์จากเครื่องสแกนนิ้วมักรวมชื่อ-นามสกุลไว้คอลัมน์เดียว ("ชื่อ-สกุล") — ถ้าไม่เจอคอลัมน์ชื่อ/นามสกุล
+// แยกกัน จะลองหาคอลัมน์รวมนี้แทน แล้วตัดแบ่งด้วยช่องว่างแรกที่เจอ
+const FULL_NAME_ALIASES = ["ชื่อ-สกุล", "ชื่อ-นามสกุล", "ชื่อสกุล", "full_name"];
 const DATE_ALIASES = ["วันที่", "date", "scan_date"];
-const TIME_IN_ALIASES = ["เวลาเข้า", "เวลาเข้างาน", "time_in"];
-const TIME_OUT_ALIASES = ["เวลาออก", "เวลาออกงาน", "time_out"];
+// "เข้างาน"/"ออกงาน" คือเวลาสแกนจริงจากเครื่อง ส่วน "เวลาเข้า"/"เวลาเลิก" คือเวลากะที่ตั้งไว้ล่วงหน้า
+// (ค่าคงที่เท่ากันทุกคน ไม่ใช่เวลาที่สแกนจริง) ต้องเลือก "เข้างาน"/"ออกงาน" ก่อนเสมอถ้ามีทั้งคู่
+const TIME_IN_ALIASES = ["เข้างาน", "เวลาเข้างานจริง", "เวลาเข้า", "time_in"];
+const TIME_OUT_ALIASES = ["ออกงาน", "เวลาออกงานจริง", "เวลาออก", "time_out"];
 
 function normalizeHeader(h: string): string {
   return h.trim().toLowerCase();
 }
 
+// คืนหัวคอลัมน์จริงที่ตรงกับ alias ตัวแรกสุด (เรียงตามความสำคัญของ aliases ไม่ใช่ตามตำแหน่งคอลัมน์ในไฟล์)
 function findKey(rowKeys: string[], aliases: string[]): string | null {
-  const normalizedAliases = aliases.map(normalizeHeader);
-  for (const k of rowKeys) {
-    if (normalizedAliases.includes(normalizeHeader(k))) return k;
+  const normalizedRowKeys = rowKeys.map((k) => ({ raw: k, norm: normalizeHeader(k) }));
+  for (const alias of aliases) {
+    const match = normalizedRowKeys.find((k) => k.norm === normalizeHeader(alias));
+    if (match) return match.raw;
   }
   return null;
+}
+
+// แยก "ชื่อ-สกุล" ที่รวมกันมาเป็นคอลัมน์เดียว ออกเป็นชื่อ/นามสกุล ด้วยช่องว่างแรกที่เจอ
+function splitFullName(s: string): { first: string; last: string } {
+  const trimmed = s.trim().replace(/\s+/g, " ");
+  const spaceIdx = trimmed.indexOf(" ");
+  if (spaceIdx === -1) return { first: trimmed, last: "" };
+  return { first: trimmed.slice(0, spaceIdx), last: trimmed.slice(spaceIdx + 1) };
 }
 
 // แปลงค่าวันที่จาก cell — รองรับ Date object (จาก cellDates:true), เลข serial ของ Excel, หรือ string
@@ -114,6 +132,8 @@ export async function POST(req: Request) {
   const kPrefix = findKey(headerKeys, PREFIX_ALIASES);
   const kFirstName = findKey(headerKeys, FIRST_NAME_ALIASES);
   const kLastName = findKey(headerKeys, LAST_NAME_ALIASES);
+  // ไฟล์จากเครื่องสแกนนิ้วมักไม่มีคอลัมน์ชื่อ/นามสกุลแยกกัน มีแต่คอลัมน์รวม "ชื่อ-สกุล" — ใช้ตัวนี้แทนถ้าไม่เจอคอลัมน์แยก
+  const kFullName = !kFirstName && !kLastName ? findKey(headerKeys, FULL_NAME_ALIASES) : null;
   const kDate = findKey(headerKeys, DATE_ALIASES);
   const kTimeIn = findKey(headerKeys, TIME_IN_ALIASES);
   const kTimeOut = findKey(headerKeys, TIME_OUT_ALIASES);
@@ -121,7 +141,7 @@ export async function POST(req: Request) {
   if (!kFingerprint || !kDate) {
     return NextResponse.json(
       {
-        error: `หาคอลัมน์ "เลขสแกนนิ้ว" หรือ "วันที่" ไม่เจอในไฟล์ — คอลัมน์ที่พบ: ${headerKeys.join(", ")} (ดาวน์โหลดเทมเพลตแล้วใช้หัวตารางตามนั้น)`,
+        error: `หาคอลัมน์ "รหัสนิ้วมือ"/"เลขสแกนนิ้ว" หรือ "วันที่" ไม่เจอในไฟล์ — คอลัมน์ที่พบ: ${headerKeys.join(", ")} (รองรับทั้งไฟล์ที่ดึงตรงจากเครื่องสแกนนิ้ว และไฟล์ตามเทมเพลตของระบบ)`,
       },
       { status: 400 }
     );
@@ -151,11 +171,19 @@ export async function POST(req: Request) {
       skippedReasons.push(`แถวที่ ${idx + 2}: อ่านวันที่ไม่ได้ (ค่าที่ได้: ${String(row[kDate])})`);
       return;
     }
+    let firstName = kFirstName ? String(row[kFirstName] ?? "").trim() : "";
+    let lastName = kLastName ? String(row[kLastName] ?? "").trim() : "";
+    if (!firstName && !lastName && kFullName) {
+      const split = splitFullName(String(row[kFullName] ?? ""));
+      firstName = split.first;
+      lastName = split.last;
+    }
+
     parsed.push({
       fingerprint_no: fingerprint,
       prefix: kPrefix ? String(row[kPrefix] ?? "").trim() : "",
-      first_name: kFirstName ? String(row[kFirstName] ?? "").trim() : "",
-      last_name: kLastName ? String(row[kLastName] ?? "").trim() : "",
+      first_name: firstName,
+      last_name: lastName,
       scan_date: scanDate,
       time_in: kTimeIn ? parseTimeCell(row[kTimeIn]) : null,
       time_out: kTimeOut ? parseTimeCell(row[kTimeOut]) : null,

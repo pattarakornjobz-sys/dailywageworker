@@ -78,4 +78,5 @@ td { padding: 8px 10px; border-top: 1px solid var(--line-soft); }
   body { background: #fff; }
   .page { max-width: none; padding: 0; }
   .card { border: none; padding: 0; }
+  .signature-page { break-before: page; page-break-before: always; }
 }

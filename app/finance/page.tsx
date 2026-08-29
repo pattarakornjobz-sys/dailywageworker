@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Agency, BankCompanyCode, PayrollBatch, PayrollDetail, PayrollPeriod, Profile } from "@/lib/types";
 import FinanceBoard from "./FinanceBoard";
+import PdfReportPicker from "./PdfReportPicker";
 import LogoutButton from "@/components/LogoutButton";
 
 const VISIBLE_STATUSES = ["submitted_to_central", "finance_received", "transferring", "paid", "rejected"];
@@ -72,6 +73,21 @@ export default async function FinanceHome() {
 
   const grandTotal = batches.reduce((s, b) => s + (totalByPeriod.get(b.period_id) ?? 0), 0);
 
+  // ช่วงรอบจ่ายที่มีให้เลือกสำหรับพิมพ์รายงาน PDF รวม — เอาเฉพาะช่วงวันที่ไม่ซ้ำกัน เรียงล่าสุดก่อน
+  const rangeCounts = new Map<string, number>();
+  for (const batch of batches) {
+    const period = periodById.get(batch.period_id);
+    if (!period) continue;
+    const key = `${period.period_start}|${period.period_end}`;
+    rangeCounts.set(key, (rangeCounts.get(key) ?? 0) + 1);
+  }
+  const reportRanges = Array.from(rangeCounts.entries())
+    .map(([key, count]) => {
+      const [start, end] = key.split("|");
+      return { start, end, count };
+    })
+    .sort((a, b) => b.start.localeCompare(a.start));
+
   return (
     <div>
       <div className="topbar">
@@ -85,9 +101,7 @@ export default async function FinanceHome() {
           <Link href="/finance/transfers" className="btn">
             สรุปรายการโอนเงิน
           </Link>
-          <a className="btn" href="/api/finance-report">
-            ดาวน์โหลดรายงานสรุป (PDF)
-          </a>
+          <PdfReportPicker ranges={reportRanges} />
           <span style={{ fontSize: 13.5, color: "var(--ink-soft)" }}>{profile.full_name}</span>
           <LogoutButton />
         </div>

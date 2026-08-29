@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { STATUS_LABEL } from "@/lib/statusLabels";
 import SubmitButton from "./SubmitButton";
 import PrintButton from "./PrintButton";
-import type { Agency, DetailWithEmployee, Employee, PayrollBatch, PayrollDetail, PayrollPeriod } from "@/lib/types";
+import StatusTimeline from "@/components/StatusTimeline";
+import type { Agency, DetailWithEmployee, Employee, PayrollBatch, PayrollDetail, PayrollPeriod, StatusEvent } from "@/lib/types";
 
 export default async function ClerkBatchDetail({ params }: { params: { batchId: string } }) {
   const supabase = createClient();
@@ -54,6 +55,19 @@ export default async function ClerkBatchDetail({ params }: { params: { batchId: 
   const totalDays = rows.reduce((s, r) => s + r.days_full + r.days_half, 0);
   const totalAmount = rows.reduce((s, r) => s + r.total_amount, 0);
   const ackCount = rows.filter((r) => r.employee_ack_at).length;
+
+  const { data: eventsData } = await supabase
+    .from("payroll_status_events")
+    .select("id, batch_id, from_status, to_status, actor_id, note, created_at")
+    .eq("batch_id", batch.id)
+    .order("created_at", { ascending: true });
+  const events = (eventsData ?? []) as StatusEvent[];
+  const actorIds = [...new Set(events.map((e) => e.actor_id).filter(Boolean))] as string[];
+  const { data: actorsData } = actorIds.length
+    ? await supabase.from("profiles").select("id, full_name").in("id", actorIds)
+    : { data: [] };
+  const actorNameById = new Map(((actorsData ?? []) as { id: string; full_name: string }[]).map((p) => [p.id, p.full_name]));
+  const eventsWithActor: StatusEvent[] = events.map((e) => ({ ...e, actor_name: e.actor_id ? actorNameById.get(e.actor_id) : null }));
 
   return (
     <div>
@@ -139,6 +153,8 @@ export default async function ClerkBatchDetail({ params }: { params: { batchId: 
           <PrintButton />
           <SubmitButton batchId={batch.id} currentStatus={batch.status} />
         </div>
+
+        <StatusTimeline events={eventsWithActor} />
       </div>
     </div>
   );

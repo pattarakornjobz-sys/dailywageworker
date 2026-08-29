@@ -91,6 +91,17 @@ export interface BankTransferBatch {
   generated_at: string;
 }
 
+export interface StatusEvent {
+  id: string;
+  batch_id: string;
+  from_status: PayrollStatus | null;
+  to_status: PayrollStatus;
+  actor_id: string | null;
+  note: string | null;
+  created_at: string;
+  actor_name?: string | null;
+}
+
 export interface BankTransferItem {
   id: string;
   transfer_batch_id: string;

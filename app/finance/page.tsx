@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { STATUS_LABEL, STATUS_COLOR, effectiveStatus } from "@/lib/statusLabels";
-import type { Agency, PayrollBatch, PayrollPeriod, Profile } from "@/lib/types";
+import type { Agency, BankCompanyCode, PayrollBatch, PayrollDetail, PayrollPeriod, Profile } from "@/lib/types";
+import { QuickReceiveButton, QuickTransferPanel } from "./QuickActions";
 
 const VISIBLE_STATUSES = ["submitted_to_central", "finance_received", "transferring", "paid", "rejected"];
 
@@ -36,9 +37,40 @@ export default async function FinanceHome() {
 
   const agencyIds = [...new Set(((periodsData ?? []) as PayrollPeriod[]).map((p) => p.agency_id))];
   const { data: agenciesData } = agencyIds.length
-    ? await supabase.from("agencies").select("id, name, code").in("id", agencyIds)
+    ? await supabase.from("agencies").select("id, name, code").in("id", agencyIds).order("code")
     : { data: [] };
   const agencyById = new Map(((agenciesData ?? []) as Agency[]).map((a) => [a.id, a]));
+
+  // ยอดรวมต่อ batch (sum(total_amount) ของ payroll_details ในรอบนั้น)
+  const { data: detailsData } = periodIds.length
+    ? await supabase.from("payroll_details").select("period_id, total_amount").in("period_id", periodIds)
+    : { data: [] };
+  const totalByPeriod = new Map<string, number>();
+  for (const d of (detailsData ?? []) as Pick<PayrollDetail, "period_id" | "total_amount">[]) {
+    totalByPeriod.set(d.period_id, (totalByPeriod.get(d.period_id) ?? 0) + d.total_amount);
+  }
+
+  const { data: companyCodesData } = await supabase
+    .from("bank_company_codes")
+    .select("code, name, is_active")
+    .eq("is_active", true)
+    .order("code");
+  const companyCodes = (companyCodesData ?? []) as BankCompanyCode[];
+
+  // จัดกลุ่ม batch ตามหน่วยงาน
+  const batchesByAgency = new Map<string, { agency: Agency; rows: (PayrollBatch & { period: PayrollPeriod; total: number })[] }>();
+  for (const batch of batches) {
+    const period = periodById.get(batch.period_id);
+    if (!period) continue;
+    const agency = agencyById.get(period.agency_id);
+    if (!agency) continue;
+    const entry = batchesByAgency.get(agency.id) ?? { agency, rows: [] };
+    entry.rows.push({ ...batch, period, total: totalByPeriod.get(period.id) ?? 0 });
+    batchesByAgency.set(agency.id, entry);
+  }
+  const groups = Array.from(batchesByAgency.values()).sort((a, b) => a.agency.code.localeCompare(b.agency.code));
+
+  const grandTotal = batches.reduce((s, b) => s + (totalByPeriod.get(b.period_id) ?? 0), 0);
 
   return (
     <div>
@@ -47,7 +79,7 @@ export default async function FinanceHome() {
           <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "var(--muted)", textTransform: "uppercase" }}>
             การเงิน
           </div>
-          <strong>รายการรอดำเนินการ</strong>
+          <strong>ภาพรวมทุกหน่วยงาน — รายการรอดำเนินการ</strong>
         </div>
         <div style={{ fontSize: 13.5, color: "var(--ink-soft)" }}>{profile.full_name}</div>
       </div>
@@ -55,43 +87,61 @@ export default async function FinanceHome() {
       <div className="page">
         {batches.length === 0 && <p style={{ color: "var(--muted)" }}>ยังไม่มีเรื่องส่งเข้ามา</p>}
 
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <table>
-            <thead>
-              <tr>
-                <th>หน่วยงาน</th>
-                <th>ช่วงรอบจ่าย</th>
-                <th>สถานะ</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {batches.map((batch) => {
-                const period = periodById.get(batch.period_id);
-                const agency = period ? agencyById.get(period.agency_id) : undefined;
-                const status = effectiveStatus(batch.status, null);
-                return (
-                  <tr key={batch.id}>
-                    <td>{agency?.name ?? "-"}</td>
-                    <td>
-                      {period?.period_start} – {period?.period_end}
-                    </td>
-                    <td>
-                      <span className="pill" style={{ background: "#0000", color: STATUS_COLOR[status] }}>
-                        ● {STATUS_LABEL[status]}
-                      </span>
-                    </td>
-                    <td>
-                      <Link href={`/finance/${batch.id}`} className="btn">
-                        เปิดเรื่อง →
-                      </Link>
-                    </td>
+        {batches.length > 0 && (
+          <div style={{ fontSize: 13.5, color: "var(--ink-soft)", marginBottom: 18 }}>
+            รวมทั้งหมด {batches.length} รายการ · {groups.length} หน่วยงาน · ยอดรวม {grandTotal.toLocaleString()} บาท
+          </div>
+        )}
+
+        {groups.map(({ agency, rows }) => (
+          <div key={agency.id} style={{ marginBottom: 26 }}>
+            <h3 style={{ fontSize: 14.5, marginBottom: 10, display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ color: "var(--muted)", fontSize: 11, fontWeight: 400 }}>{agency.code}</span>
+              {agency.name}
+            </h3>
+            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>ช่วงรอบจ่าย</th>
+                    <th>ยอดรวม</th>
+                    <th>สถานะ</th>
+                    <th>การดำเนินการ</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {rows.map((batch) => {
+                    const status = effectiveStatus(batch.status, null);
+                    return (
+                      <tr key={batch.id}>
+                        <td>
+                          {batch.period.period_start} – {batch.period.period_end}
+                        </td>
+                        <td>{batch.total.toLocaleString()} บาท</td>
+                        <td>
+                          <span className="pill" style={{ background: "#0000", color: STATUS_COLOR[status] }}>
+                            ● {STATUS_LABEL[status]}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                            {batch.status === "submitted_to_central" && <QuickReceiveButton batchId={batch.id} />}
+                            {batch.status === "finance_received" && (
+                              <QuickTransferPanel batchId={batch.id} companyCodes={companyCodes} />
+                            )}
+                            <Link href={`/finance/${batch.id}`} className="btn">
+                              รายละเอียด →
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

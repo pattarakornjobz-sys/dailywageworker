@@ -2,31 +2,18 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { STATUS_LABEL, STATUS_COLOR, effectiveStatus } from "@/lib/statusLabels";
-import type { Agency, PayrollPeriod, PayrollBatch, Profile } from "@/lib/types";
+import type { Agency, PayrollPeriod, PayrollBatch } from "@/lib/types";
 
-export default async function ClerkHome() {
+export default async function ClerkOverview() {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profileData } = await supabase
-    .from("profiles")
-    .select("id, full_name, role, agency_id")
-    .eq("id", user.id)
-    .single();
-  const profile = profileData as Profile | null;
-  if (!profile || profile.role !== "agency_clerk") redirect("/login?error=unsupported_role");
+  const { data: agenciesData } = await supabase.from("agencies").select("id, name, code").order("code");
+  const agencies = (agenciesData ?? []) as Agency[];
 
-  const { data: agencyData } = await supabase
-    .from("agencies")
-    .select("id, name, code")
-    .eq("id", profile.agency_id)
-    .single();
-  const agency = agencyData as Agency | null;
-
-  // ดึงรอบจ่ายของหน่วยงานตัวเอง พร้อม batch (RLS กรองให้เห็นเฉพาะหน่วยงานตัวเองอยู่แล้ว)
   const { data: periodsData } = await supabase
     .from("payroll_periods")
     .select("id, agency_id, period_start, period_end")
@@ -39,6 +26,13 @@ export default async function ClerkHome() {
   const batches = (batchesData ?? []) as PayrollBatch[];
   const batchByPeriod = new Map(batches.map((b) => [b.period_id, b]));
 
+  // รวมรอบจ่ายล่าสุดต่อหน่วยงาน 1 แถว
+  const latestPeriodByAgency = new Map<string, PayrollPeriod>();
+  for (const p of periods) {
+    const existing = latestPeriodByAgency.get(p.agency_id);
+    if (!existing || p.period_start > existing.period_start) latestPeriodByAgency.set(p.agency_id, p);
+  }
+
   return (
     <div>
       <div className="topbar">
@@ -46,45 +40,44 @@ export default async function ClerkHome() {
           <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "var(--muted)", textTransform: "uppercase" }}>
             ธุรการต้นสังกัด
           </div>
-          <strong>{agency?.name ?? "-"}</strong>
+          <strong>ภาพรวมทุกหน่วยงาน ({agencies.length} หน่วยงาน)</strong>
         </div>
-        <div style={{ fontSize: 13.5, color: "var(--ink-soft)" }}>{profile.full_name}</div>
       </div>
 
       <div className="page">
-        <h2 style={{ marginBottom: 18 }}>รอบจ่ายของหน่วยงาน</h2>
-
-        {periods.length === 0 && <p style={{ color: "var(--muted)" }}>ยังไม่มีรอบจ่ายในระบบสำหรับหน่วยงานนี้</p>}
-
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           <table>
             <thead>
               <tr>
-                <th>ช่วงรอบจ่าย</th>
+                <th>หน่วยงาน</th>
+                <th>รอบจ่ายล่าสุด</th>
                 <th>สถานะ</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {periods.map((period) => {
-                const batch = batchByPeriod.get(period.id);
-                const status = batch ? effectiveStatus(batch.status, null) : "draft";
+              {agencies.map((agency) => {
+                const period = latestPeriodByAgency.get(agency.id);
+                const batch = period ? batchByPeriod.get(period.id) : undefined;
+                const status = batch ? effectiveStatus(batch.status, null) : null;
                 return (
-                  <tr key={period.id}>
+                  <tr key={agency.id}>
                     <td>
-                      {period.period_start} – {period.period_end}
+                      <div style={{ color: "var(--muted)", fontSize: 11 }}>{agency.code}</div>
+                      {agency.name}
                     </td>
+                    <td>{period ? `${period.period_start} – ${period.period_end}` : <span style={{ color: "var(--muted)" }}>ยังไม่มีรอบจ่าย</span>}</td>
                     <td>
-                      <span className="pill" style={{ background: "#0000", color: STATUS_COLOR[status] }}>
-                        ● {STATUS_LABEL[status]}
-                      </span>
-                    </td>
-                    <td>
-                      {batch && (
-                        <Link href={`/clerk/${batch.id}`} className="btn">
-                          เปิดรายงาน →
-                        </Link>
+                      {status && (
+                        <span className="pill" style={{ background: "#0000", color: STATUS_COLOR[status] }}>
+                          ● {STATUS_LABEL[status]}
+                        </span>
                       )}
+                    </td>
+                    <td>
+                      <Link href={`/clerk/agency/${agency.id}`} className="btn">
+                        เปิดหน่วยงาน →
+                      </Link>
                     </td>
                   </tr>
                 );

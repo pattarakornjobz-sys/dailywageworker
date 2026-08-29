@@ -36,11 +36,13 @@ export interface Employee {
   prefix: string;
   first_name: string;
   last_name: string;
+  position: string | null;
   daily_rate: number;
   fingerprint_no: string;
   bank_account_no: string | null;
   bank_name: string | null;
   bank_branch: string | null;
+  status: "active" | "inactive";
 }
 
 export interface PayrollPeriod {
